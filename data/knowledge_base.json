@@ -1,0 +1,128 @@
+{
+  "store": {
+    "name": "Brewline Coffee Gear",
+    "hours": "Monday to Saturday, 9:00 to 18:00 (Pakistan time). Closed on Sundays.",
+    "note": "Fictional sample store used for demonstration only."
+  },
+  "faqs": [
+    {
+      "id": "shipping-cost",
+      "topic": "shipping",
+      "keywords": ["shipping", "delivery", "deliver", "ship", "cost", "free", "postage"],
+      "text": "Shipping: standard delivery takes 3 to 5 working days and costs $6. Orders of $50 or more ship free. Express delivery takes 1 to 2 working days and costs $15."
+    },
+    {
+      "id": "shipping-where",
+      "topic": "shipping",
+      "keywords": ["international", "country", "abroad", "overseas", "ship to", "countries"],
+      "text": "We currently ship within Pakistan, the UAE and the UK. International orders take 7 to 10 working days."
+    },
+    {
+      "id": "returns",
+      "topic": "returns",
+      "keywords": ["return", "refund", "exchange", "send back", "money back", "unopened"],
+      "text": "Returns: items can be returned within 30 days of delivery if unused and in the original packaging. Refunds go back to the original payment method within 5 to 7 working days after we receive the item. Return shipping is paid by the customer unless the item arrived damaged."
+    },
+    {
+      "id": "damaged",
+      "topic": "returns",
+      "keywords": ["damaged", "broken", "defective", "faulty", "cracked", "not working", "dead on arrival"],
+      "text": "Damaged or faulty items: customers can send a photo to this chat within 7 days of delivery. We replace the item or refund it, and we pay the return shipping."
+    },
+    {
+      "id": "warranty",
+      "topic": "warranty",
+      "keywords": ["warranty", "guarantee", "covered", "repair"],
+      "text": "Warranty: electric grinders and kettles have a 2 year warranty. Manual brewers and accessories have a 6 month warranty. The warranty covers manufacturing faults, not accidental damage."
+    },
+    {
+      "id": "payment",
+      "topic": "payment",
+      "keywords": ["payment", "pay", "card", "cash", "cod", "cash on delivery", "bank transfer", "installment"],
+      "text": "Payment: we accept credit and debit cards, bank transfer and cash on delivery (Pakistan only, orders up to $200). We do not offer instalment plans."
+    },
+    {
+      "id": "tracking",
+      "topic": "order_status",
+      "keywords": ["track", "tracking", "order", "where is", "status", "parcel", "package"],
+      "text": "Order tracking: customers can ask for their order status here by sending the order number, which looks like ORD-1001."
+    },
+    {
+      "id": "hours",
+      "topic": "hours",
+      "keywords": ["open", "hours", "close", "closing", "time", "sunday", "available", "when"],
+      "text": "Support hours: Monday to Saturday, 9:00 to 18:00 Pakistan time. Closed on Sundays. The assistant is available 24 hours, and a teammate replies to handed-over chats during support hours."
+    },
+    {
+      "id": "discount",
+      "topic": "discount",
+      "keywords": ["discount", "coupon", "promo", "code", "offer", "sale", "cheaper"],
+      "text": "Discounts: new customers get 10% off their first order with the code WELCOME10. There are no other active promotions. The assistant cannot create or approve special discounts."
+    }
+  ],
+  "products": [
+    {
+      "sku": "BG-101",
+      "name": "Brewline Burr Grinder Pro",
+      "price": 129,
+      "stock": 14,
+      "keywords": ["grinder", "burr", "grind", "pro", "bg-101"],
+      "text": "Brewline Burr Grinder Pro (BG-101): electric conical burr grinder, 40 grind settings, 250 g hopper. Price $129. In stock: 14. Warranty 2 years."
+    },
+    {
+      "sku": "BG-102",
+      "name": "Brewline Hand Grinder Mini",
+      "price": 54,
+      "stock": 0,
+      "keywords": ["hand grinder", "manual grinder", "mini", "portable", "travel", "bg-102"],
+      "text": "Brewline Hand Grinder Mini (BG-102): manual grinder for travel, steel burrs, 20 g capacity. Price $54. Currently OUT OF STOCK. Restock expected in about 2 weeks."
+    },
+    {
+      "sku": "KT-201",
+      "name": "Brewline Gooseneck Kettle 1L",
+      "price": 62,
+      "stock": 9,
+      "keywords": ["kettle", "gooseneck", "pour over", "temperature", "kt-201"],
+      "text": "Brewline Gooseneck Kettle 1L (KT-201): electric, temperature control from 40 to 100 C, hold function. Price $62. In stock: 9. Warranty 2 years."
+    },
+    {
+      "sku": "DR-301",
+      "name": "Brewline Ceramic Dripper V60 style",
+      "price": 18,
+      "stock": 40,
+      "keywords": ["dripper", "v60", "pour over", "ceramic", "dr-301"],
+      "text": "Brewline Ceramic Dripper (DR-301): V60 style cone dripper for 1 to 2 cups. Price $18. In stock: 40. Warranty 6 months."
+    },
+    {
+      "sku": "FP-401",
+      "name": "Brewline French Press 600ml",
+      "price": 26,
+      "stock": 22,
+      "keywords": ["french press", "press", "plunger", "fp-401"],
+      "text": "Brewline French Press 600ml (FP-401): borosilicate glass, stainless steel frame, 2 to 3 cups. Price $26. In stock: 22. Warranty 6 months."
+    },
+    {
+      "sku": "SC-501",
+      "name": "Brewline Digital Coffee Scale",
+      "price": 29,
+      "stock": 3,
+      "keywords": ["scale", "weigh", "timer", "digital", "sc-501"],
+      "text": "Brewline Digital Coffee Scale (SC-501): 0.1 g accuracy up to 2 kg, built-in timer, USB-C rechargeable. Price $29. In stock: only 3 left. Warranty 6 months."
+    },
+    {
+      "sku": "BN-601",
+      "name": "Brewline House Blend Beans 1kg",
+      "price": 24,
+      "stock": 60,
+      "keywords": ["beans", "coffee beans", "house blend", "roast", "blend", "bn-601"],
+      "text": "Brewline House Blend Beans 1kg (BN-601): medium roast, notes of chocolate and hazelnut. Price $24. In stock: 60. Roasted to order and shipped within 2 working days."
+    }
+  ],
+  "orders": [
+    { "id": "ORD-1001", "status": "Delivered", "detail": "Delivered on 2026-11-04. Items: Brewline Burr Grinder Pro x1." },
+    { "id": "ORD-1002", "status": "Shipped", "detail": "Shipped on 2026-11-11 with TCS, tracking TCS-77421903. Expected delivery 2026-11-15. Items: Brewline Gooseneck Kettle 1L x1, Brewline Digital Coffee Scale x1." },
+    { "id": "ORD-1003", "status": "Processing", "detail": "Payment received on 2026-11-12. Packing starts within 1 working day. Items: Brewline House Blend Beans 1kg x2." },
+    { "id": "ORD-1004", "status": "Delayed", "detail": "Placed on 2026-11-02. Delayed because the Brewline Hand Grinder Mini is out of stock. New ship date is about 2026-11-26. Customer can choose to wait or cancel for a full refund." },
+    { "id": "ORD-1005", "status": "Cancelled", "detail": "Cancelled on 2026-11-09 at the customer's request. Refund issued, expected in 5 to 7 working days." }
+  ]
+}

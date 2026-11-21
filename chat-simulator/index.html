@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brewline support chat (simulator)</title>
+<style>
+  :root {
+    --bg: #0b141a; --panel: #111b21; --head: #202c33; --in: #202c33; --out: #005c4b;
+    --text: #e9edef; --muted: #8696a0; --accent: #25d366; --amber: #f2b84b; --line: rgba(255,255,255,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: "Segoe UI", system-ui, sans-serif; }
+  #app { max-width: 520px; height: 100%; margin: 0 auto; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--head); }
+  .av { width: 42px; height: 42px; border-radius: 50%; background: #6a4a3a; display: grid; place-items: center; font-size: 20px; }
+  header h1 { font-size: 16px; font-weight: 600; }
+  header small { display: block; color: var(--muted); font-size: 12.5px; }
+  header .sp { flex: 1; }
+  header button { background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+  header button:hover { color: var(--text); }
+  #log { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px;
+    background-image: radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px); background-size: 22px 22px; }
+  .day { align-self: center; background: var(--head); color: var(--muted); font-size: 12px; padding: 4px 12px; border-radius: 8px; margin-bottom: 4px; }
+  .row { display: flex; flex-direction: column; max-width: 82%; }
+  .row.me { align-self: flex-end; align-items: flex-end; }
+  .row.bot { align-self: flex-start; align-items: flex-start; }
+  .bub { padding: 8px 12px 6px; border-radius: 10px; font-size: 15px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+  .me .bub { background: var(--out); border-top-right-radius: 2px; }
+  .bot .bub { background: var(--in); border-top-left-radius: 2px; }
+  .ts { font-size: 11px; color: var(--muted); margin-top: 2px; padding: 0 4px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .chip { font-size: 11.5px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,.07); color: var(--muted); }
+  .chip.warn { background: rgba(242,184,75,.16); color: var(--amber); }
+  .chip.ok { background: rgba(37,211,102,.14); color: var(--accent); }
+  .typing .bub { display: flex; gap: 4px; padding: 12px 14px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: b 1.1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes b { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+  .banner { align-self: center; background: rgba(242,184,75,.12); color: var(--amber); font-size: 12.5px; padding: 6px 14px; border-radius: 10px; }
+  .quick { display: flex; gap: 8px; padding: 8px 12px; overflow-x: auto; background: var(--panel); border-top: 1px solid var(--line); }
+  .quick button { flex: none; background: var(--head); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  .quick button:hover { border-color: var(--accent); }
+  form { display: flex; gap: 8px; padding: 10px 12px; background: var(--head); }
+  input[type=text] { flex: 1; background: #2a3942; border: none; color: var(--text); border-radius: 22px; padding: 11px 16px; font-size: 15px; outline: none; }
+  form button { width: 44px; height: 44px; border-radius: 50%; border: none; background: var(--accent); color: #07120d; font-size: 18px; cursor: pointer; }
+  form button:disabled { opacity: .5; cursor: default; }
+  #cfg { display: none; padding: 12px 16px; background: var(--head); border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  #cfg.open { display: block; }
+  #cfg input { width: 100%; margin: 6px 0 4px; background: #2a3942; border: none; color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  #err { color: #ff8a80; font-size: 12.5px; padding: 0 16px 6px; display: none; background: var(--head); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="av">&#9749;</div>
+    <div><h1>Brewline Coffee Gear</h1><small>sample store &middot; AI assistant</small></div>
+    <div class="sp"></div>
+    <button id="gear" type="button" title="Webhook settings">Settings</button>
+    <button id="exp" type="button" title="Download the conversation as JSON">Export</button>
+  </header>
+  <div id="cfg">
+    n8n webhook URL
+    <input id="url" type="text" spellcheck="false">
+    Use <b>/webhook-test/support-agent</b> while the workflow is open in the editor ("Listen for test event"), or <b>/webhook/support-agent</b> once it is published.
+  </div>
+  <div id="log"><div class="day">Today</div></div>
+  <div id="err"></div>
+  <div class="quick" id="quick"></div>
+  <form id="f" autocomplete="off">
+    <input id="msg" type="text" placeholder="Type a message" autofocus>
+    <button id="send" type="submit" aria-label="Send">&#10148;</button>
+  </form>
+</div>
+<script>
+(function () {
+  var DEFAULT_URL = 'http://localhost:5678/webhook/support-agent';
+  var QUICK = [
+    'Hi, do you have the burr grinder in stock?',
+    'How much is shipping to Karachi?',
+    'Where is my order ORD-1002?',
+    'Can I get a 50% discount?',
+    'I want to speak to a human'
+  ];
+  var log = document.getElementById('log');
+  var errBox = document.getElementById('err');
+  var urlInput = document.getElementById('url');
+  var phone = 'web-demo-' + Math.floor(1000 + Math.random() * 9000);
+  var transcript = [];
+  var busy = false;
+
+  function load(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  urlInput.value = load('brewline_url', DEFAULT_URL);
+  urlInput.addEventListener('change', function () { save('brewline_url', urlInput.value.trim()); });
+  document.getElementById('gear').onclick = function () { document.getElementById('cfg').classList.toggle('open'); };
+
+  function time() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+  function scroll() { log.scrollTop = log.scrollHeight; }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+  function addMe(text) {
+    var row = el('div', 'row me'); row.appendChild(el('div', 'bub', text)); row.appendChild(el('div', 'ts', time()));
+    log.appendChild(row); scroll();
+  }
+  function addTyping() {
+    var row = el('div', 'row bot typing'); var b = el('div', 'bub'); b.innerHTML = '<i></i><i></i><i></i>'; row.appendChild(b);
+    log.appendChild(row); scroll(); return row;
+  }
+  function addBot(d) {
+    var row = el('div', 'row bot'); row.appendChild(el('div', 'bub', d.reply));
+    var meta = el('div', 'meta');
+    if (d.intent) meta.appendChild(el('span', 'chip', d.intent.replace(/_/g, ' ')));
+    if (typeof d.confidence === 'number' && d.route === 'llm') meta.appendChild(el('span', 'chip', 'confidence ' + Math.round(d.confidence * 100) + '%'));
+    if (d.sources && d.sources.length) meta.appendChild(el('span', 'chip ok', 'from: ' + d.sources.join(', ')));
+    if (d.escalated) meta.appendChild(el('span', 'chip warn', 'handed to a teammate'));
+    row.appendChild(meta); row.appendChild(el('div', 'ts', time()));
+    log.appendChild(row);
+    if (d.escalated) log.appendChild(el('div', 'banner', 'A support ticket was opened for the team'));
+    scroll();
+  }
+  function showErr(t) { errBox.textContent = t; errBox.style.display = t ? 'block' : 'none'; }
+
+  function send(text) {
+    text = (text || '').trim();
+    if (!text || busy) return;
+    busy = true; showErr('');
+    document.getElementById('send').disabled = true;
+    addMe(text);
+    var typing = addTyping();
+    var started = Date.now();
+    var url = urlInput.value.trim() || DEFAULT_URL;
+    // text/plain keeps this a "simple" request, so the browser sends no CORS preflight
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify({ from: phone, name: 'Demo customer', text: text }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 404 ? ' (is the workflow listening? check the URL in Settings)' : ''));
+        return r.json();
+      })
+      .then(function (d) {
+        typing.remove();
+        if (!d || typeof d.reply !== 'string') throw new Error('Unexpected response from n8n');
+        addBot(d);
+        transcript.push({ customer: text, agent: d, ms: Date.now() - started, at: new Date().toISOString() });
+      })
+      .catch(function (e) {
+        typing.remove();
+        showErr('Could not reach the agent: ' + e.message);
+      })
+      .then(function () { busy = false; document.getElementById('send').disabled = false; document.getElementById('msg').focus(); });
+  }
+
+  document.getElementById('f').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var i = document.getElementById('msg'); var t = i.value; i.value = ''; send(t);
+  });
+  var q = document.getElementById('quick');
+  QUICK.forEach(function (t) { var b = el('button', '', t); b.type = 'button'; b.onclick = function () { send(t); }; q.appendChild(b); });
+
+  document.getElementById('exp').onclick = function () {
+    var blob = new Blob([JSON.stringify({ store: 'Brewline Coffee Gear (sample)', exported_at: new Date().toISOString(), webhook: urlInput.value, turns: transcript }, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'support-agent-transcript.json'; document.body.appendChild(a); a.click(); a.remove();
+  };
+})();
+</script>
+</body>
+</html>

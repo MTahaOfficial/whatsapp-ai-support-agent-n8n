@@ -1,0 +1,479 @@
+{
+  "name": "WhatsApp AI support agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-agent",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "a1",
+      "name": "Customer message",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "6f1d2a54-8c3e-4b7a-9d21-5a0c3e7b1f42"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize: accept a WhatsApp Cloud API webhook payload OR the simple web-chat payload.\nconst item = $input.first().json;\nlet body = item.body !== undefined ? item.body : item;\nif (typeof body === 'string') {\n  try { body = JSON.parse(body); } catch (e) { body = { text: body }; }\n}\n\nconst wa = body && body.entry && body.entry[0] && body.entry[0].changes && body.entry[0].changes[0]\n  ? body.entry[0].changes[0].value\n  : null;\n\nlet from, name, text, messageId, source;\nif (wa && wa.messages && wa.messages.length) {\n  const m = wa.messages[0];\n  source = 'whatsapp';\n  from = m.from;\n  messageId = m.id;\n  name = (wa.contacts && wa.contacts[0] && wa.contacts[0].profile && wa.contacts[0].profile.name) || 'Customer';\n  text = m.type === 'text' && m.text ? m.text.body : '';\n} else {\n  source = 'web';\n  from = body.from || 'web-demo';\n  name = body.name || 'Demo customer';\n  text = body.text || body.message || '';\n  messageId = body.id || `web-${Date.now()}`;\n}\n\ntext = String(text || '').trim().slice(0, 1000);\n\nreturn [{\n  json: {\n    phone: String(from),\n    name: String(name),\n    text,\n    message_id: String(messageId),\n    empty: text.length === 0,\n    source,\n  },\n}];\n"
+      },
+      "id": "a2",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "support_messages",
+        "options": {
+          "limit": 6,
+          "sort": "{\"created_at\": -1}"
+        },
+        "query": "={{ JSON.stringify({ phone: $('Normalize').first().json.phone }) }}"
+      },
+      "id": "a3",
+      "name": "Get history",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        520,
+        300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "REPLACE_ME",
+          "name": "MongoDB (n8n app user)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build context: find the most relevant knowledge-base entries, look up an order if the\n// customer sent an order number, decide the route, and build the model messages.\nconst KB = {\n  \"store\": {\n    \"name\": \"Brewline Coffee Gear\",\n    \"hours\": \"Monday to Saturday, 9:00 to 18:00 (Pakistan time). Closed on Sundays.\",\n    \"note\": \"Fictional sample store used for demonstration only.\"\n  },\n  \"faqs\": [\n    {\n      \"id\": \"shipping-cost\",\n      \"topic\": \"shipping\",\n      \"keywords\": [\n        \"shipping\",\n        \"delivery\",\n        \"deliver\",\n        \"ship\",\n        \"cost\",\n        \"free\",\n        \"postage\"\n      ],\n      \"text\": \"Shipping: standard delivery takes 3 to 5 working days and costs $6. Orders of $50 or more ship free. Express delivery takes 1 to 2 working days and costs $15.\"\n    },\n    {\n      \"id\": \"shipping-where\",\n      \"topic\": \"shipping\",\n      \"keywords\": [\n        \"international\",\n        \"country\",\n        \"abroad\",\n        \"overseas\",\n        \"ship to\",\n        \"countries\"\n      ],\n      \"text\": \"We currently ship within Pakistan, the UAE and the UK. International orders take 7 to 10 working days.\"\n    },\n    {\n      \"id\": \"returns\",\n      \"topic\": \"returns\",\n      \"keywords\": [\n        \"return\",\n        \"refund\",\n        \"exchange\",\n        \"send back\",\n        \"money back\",\n        \"unopened\"\n      ],\n      \"text\": \"Returns: items can be returned within 30 days of delivery if unused and in the original packaging. Refunds go back to the original payment method within 5 to 7 working days after we receive the item. Return shipping is paid by the customer unless the item arrived damaged.\"\n    },\n    {\n      \"id\": \"damaged\",\n      \"topic\": \"returns\",\n      \"keywords\": [\n        \"damaged\",\n        \"broken\",\n        \"defective\",\n        \"faulty\",\n        \"cracked\",\n        \"not working\",\n        \"dead on arrival\"\n      ],\n      \"text\": \"Damaged or faulty items: customers can send a photo to this chat within 7 days of delivery. We replace the item or refund it, and we pay the return shipping.\"\n    },\n    {\n      \"id\": \"warranty\",\n      \"topic\": \"warranty\",\n      \"keywords\": [\n        \"warranty\",\n        \"guarantee\",\n        \"covered\",\n        \"repair\"\n      ],\n      \"text\": \"Warranty: electric grinders and kettles have a 2 year warranty. Manual brewers and accessories have a 6 month warranty. The warranty covers manufacturing faults, not accidental damage.\"\n    },\n    {\n      \"id\": \"payment\",\n      \"topic\": \"payment\",\n      \"keywords\": [\n        \"payment\",\n        \"pay\",\n        \"card\",\n        \"cash\",\n        \"cod\",\n        \"cash on delivery\",\n        \"bank transfer\",\n        \"installment\"\n      ],\n      \"text\": \"Payment: we accept credit and debit cards, bank transfer and cash on delivery (Pakistan only, orders up to $200). We do not offer instalment plans.\"\n    },\n    {\n      \"id\": \"tracking\",\n      \"topic\": \"order_status\",\n      \"keywords\": [\n        \"track\",\n        \"tracking\",\n        \"order\",\n        \"where is\",\n        \"status\",\n        \"parcel\",\n        \"package\"\n      ],\n      \"text\": \"Order tracking: customers can ask for their order status here by sending the order number, which looks like ORD-1001.\"\n    },\n    {\n      \"id\": \"hours\",\n      \"topic\": \"hours\",\n      \"keywords\": [\n        \"open\",\n        \"hours\",\n        \"close\",\n        \"closing\",\n        \"time\",\n        \"sunday\",\n        \"available\",\n        \"when\"\n      ],\n      \"text\": \"Support hours: Monday to Saturday, 9:00 to 18:00 Pakistan time. Closed on Sundays. The assistant is available 24 hours, and a teammate replies to handed-over chats during support hours.\"\n    },\n    {\n      \"id\": \"discount\",\n      \"topic\": \"discount\",\n      \"keywords\": [\n        \"discount\",\n        \"coupon\",\n        \"promo\",\n        \"code\",\n        \"offer\",\n        \"sale\",\n        \"cheaper\"\n      ],\n      \"text\": \"Discounts: new customers get 10% off their first order with the code WELCOME10. There are no other active promotions. The assistant cannot create or approve special discounts.\"\n    }\n  ],\n  \"products\": [\n    {\n      \"sku\": \"BG-101\",\n      \"name\": \"Brewline Burr Grinder Pro\",\n      \"price\": 129,\n      \"stock\": 14,\n      \"keywords\": [\n        \"grinder\",\n        \"burr\",\n        \"grind\",\n        \"pro\",\n        \"bg-101\"\n      ],\n      \"text\": \"Brewline Burr Grinder Pro (BG-101): electric conical burr grinder, 40 grind settings, 250 g hopper. Price $129. In stock: 14. Warranty 2 years.\"\n    },\n    {\n      \"sku\": \"BG-102\",\n      \"name\": \"Brewline Hand Grinder Mini\",\n      \"price\": 54,\n      \"stock\": 0,\n      \"keywords\": [\n        \"hand grinder\",\n        \"manual grinder\",\n        \"mini\",\n        \"portable\",\n        \"travel\",\n        \"bg-102\"\n      ],\n      \"text\": \"Brewline Hand Grinder Mini (BG-102): manual grinder for travel, steel burrs, 20 g capacity. Price $54. Currently OUT OF STOCK. Restock expected in about 2 weeks.\"\n    },\n    {\n      \"sku\": \"KT-201\",\n      \"name\": \"Brewline Gooseneck Kettle 1L\",\n      \"price\": 62,\n      \"stock\": 9,\n      \"keywords\": [\n        \"kettle\",\n        \"gooseneck\",\n        \"pour over\",\n        \"temperature\",\n        \"kt-201\"\n      ],\n      \"text\": \"Brewline Gooseneck Kettle 1L (KT-201): electric, temperature control from 40 to 100 C, hold function. Price $62. In stock: 9. Warranty 2 years.\"\n    },\n    {\n      \"sku\": \"DR-301\",\n      \"name\": \"Brewline Ceramic Dripper V60 style\",\n      \"price\": 18,\n      \"stock\": 40,\n      \"keywords\": [\n        \"dripper\",\n        \"v60\",\n        \"pour over\",\n        \"ceramic\",\n        \"dr-301\"\n      ],\n      \"text\": \"Brewline Ceramic Dripper (DR-301): V60 style cone dripper for 1 to 2 cups. Price $18. In stock: 40. Warranty 6 months.\"\n    },\n    {\n      \"sku\": \"FP-401\",\n      \"name\": \"Brewline French Press 600ml\",\n      \"price\": 26,\n      \"stock\": 22,\n      \"keywords\": [\n        \"french press\",\n        \"press\",\n        \"plunger\",\n        \"fp-401\"\n      ],\n      \"text\": \"Brewline French Press 600ml (FP-401): borosilicate glass, stainless steel frame, 2 to 3 cups. Price $26. In stock: 22. Warranty 6 months.\"\n    },\n    {\n      \"sku\": \"SC-501\",\n      \"name\": \"Brewline Digital Coffee Scale\",\n      \"price\": 29,\n      \"stock\": 3,\n      \"keywords\": [\n        \"scale\",\n        \"weigh\",\n        \"timer\",\n        \"digital\",\n        \"sc-501\"\n      ],\n      \"text\": \"Brewline Digital Coffee Scale (SC-501): 0.1 g accuracy up to 2 kg, built-in timer, USB-C rechargeable. Price $29. In stock: only 3 left. Warranty 6 months.\"\n    },\n    {\n      \"sku\": \"BN-601\",\n      \"name\": \"Brewline House Blend Beans 1kg\",\n      \"price\": 24,\n      \"stock\": 60,\n      \"keywords\": [\n        \"beans\",\n        \"coffee beans\",\n        \"house blend\",\n        \"roast\",\n        \"blend\",\n        \"bn-601\"\n      ],\n      \"text\": \"Brewline House Blend Beans 1kg (BN-601): medium roast, notes of chocolate and hazelnut. Price $24. In stock: 60. Roasted to order and shipped within 2 working days.\"\n    }\n  ],\n  \"orders\": [\n    {\n      \"id\": \"ORD-1001\",\n      \"status\": \"Delivered\",\n      \"detail\": \"Delivered on 2026-11-04. Items: Brewline Burr Grinder Pro x1.\"\n    },\n    {\n      \"id\": \"ORD-1002\",\n      \"status\": \"Shipped\",\n      \"detail\": \"Shipped on 2026-11-11 with TCS, tracking TCS-77421903. Expected delivery 2026-11-15. Items: Brewline Gooseneck Kettle 1L x1, Brewline Digital Coffee Scale x1.\"\n    },\n    {\n      \"id\": \"ORD-1003\",\n      \"status\": \"Processing\",\n      \"detail\": \"Payment received on 2026-11-12. Packing starts within 1 working day. Items: Brewline House Blend Beans 1kg x2.\"\n    },\n    {\n      \"id\": \"ORD-1004\",\n      \"status\": \"Delayed\",\n      \"detail\": \"Placed on 2026-11-02. Delayed because the Brewline Hand Grinder Mini is out of stock. New ship date is about 2026-11-26. Customer can choose to wait or cancel for a full refund.\"\n    },\n    {\n      \"id\": \"ORD-1005\",\n      \"status\": \"Cancelled\",\n      \"detail\": \"Cancelled on 2026-11-09 at the customer's request. Refund issued, expected in 5 to 7 working days.\"\n    }\n  ]\n};\n\nconst n = $('Normalize').first().json;\nconst history = $('Get history').all()\n  .map((i) => i.json)\n  .filter((d) => d && d.user_text && d.reply)\n  .reverse(); // oldest first\n\nconst text = n.text;\nconst lower = text.toLowerCase();\n\n// ---- route -----------------------------------------------------------------\nconst HUMAN = /\\b(human|real person|live agent|an agent|manager|supervisor|complain\\w*|lawyer|legal|sue|chargeback|scam|fraud)\\b/i;\nlet route = 'llm';\nif (n.empty) route = 'empty';\nelse if (HUMAN.test(text)) route = 'human';\n\n// ---- retrieval (keyword scoring) --------------------------------------------\nconst words = new Set(lower.replace(/[^a-z0-9\\- ]/g, ' ').split(/\\s+/).filter((w) => w.length > 2));\nfunction score(entry) {\n  let s = 0;\n  for (const k of entry.keywords || []) {\n    if (lower.includes(k)) s += k.includes(' ') ? 3 : 2;\n  }\n  const nameWords = (entry.name || '').toLowerCase().split(/\\s+/);\n  for (const w of nameWords) if (w.length > 3 && words.has(w)) s += 1;\n  return s;\n}\nconst entries = [\n  ...KB.faqs.map((f) => ({ id: f.id, text: f.text, keywords: f.keywords })),\n  ...KB.products.map((p) => ({ id: p.sku, name: p.name, text: p.text, keywords: p.keywords })),\n];\nconst hits = entries\n  .map((e) => ({ e, s: score(e) }))\n  .filter((x) => x.s > 0)\n  .sort((a, b) => b.s - a.s)\n  .slice(0, 4);\n\nconst contextLines = hits.map((h) => `- ${h.e.text}`);\nconst sources = hits.map((h) => h.e.id);\n\n// ---- order lookup -------------------------------------------------------------\nconst orderIds = (text.match(/ORD-\\d{4}/gi) || []).map((s) => s.toUpperCase());\n// also remember an order id mentioned earlier in this conversation\nconst recent = history.map((h) => h.user_text).join(' ');\nconst earlier = (recent.match(/ORD-\\d{4}/gi) || []).map((s) => s.toUpperCase());\nconst askedOrder = /\\b(order|parcel|package|tracking|track|delivery|shipped)\\b/i.test(text);\n// a follow-up such as \"when will it arrive?\" reuses the order number from earlier in the chat\nconst followUp = earlier.length > 0 && /\\b(arrive|arrival|arrives|eta|late|delayed|delay|status)\\b/i.test(text);\nconst idsToCheck = orderIds.length ? orderIds : ((askedOrder || followUp) ? earlier.slice(-1) : []);\nfor (const id of idsToCheck) {\n  const o = KB.orders.find((x) => x.id === id);\n  if (o) {\n    contextLines.push(`- ORDER ${o.id}: status ${o.status}. ${o.detail}`);\n    sources.push(o.id);\n  } else {\n    contextLines.push(`- ORDER ${id}: no order with this number exists in our system.`);\n    sources.push('order-not-found');\n  }\n}\nif (askedOrder && idsToCheck.length === 0) {\n  contextLines.push('- The customer asks about an order but gave no order number. Ask them for it (format ORD-1001).');\n}\n\ncontextLines.push(`- Support hours: ${KB.store.hours}`);\n\n// ---- prompt ------------------------------------------------------------------\nconst system = [\n  `You are the WhatsApp support assistant for ${KB.store.name}, an online coffee equipment shop.`,\n  'Answer ONLY with facts found in the CONTEXT block of the latest message.',\n  'If the answer is not in the CONTEXT, say you are not sure and set \"escalate\" to true. Never invent prices, stock levels, order details, policies or discounts.',\n  'Style: friendly, plain text, at most 3 short sentences, no markdown, at most one emoji.',\n  'Escalate (set \"escalate\" to true) when the customer is upset, asks for something you cannot do (special discounts, changing an order), or the CONTEXT does not cover the question.',\n  'Reply with ONLY a JSON object, no other text, in this shape:',\n  '{\"reply\": string, \"intent\": one of [\"greeting\",\"product_info\",\"order_status\",\"shipping\",\"returns\",\"warranty\",\"payment\",\"hours\",\"discount\",\"other\"], \"escalate\": boolean, \"confidence\": number between 0 and 1}',\n].join('\\n');\n\nconst messages = [{ role: 'system', content: system }];\nfor (const h of history.slice(-4)) {\n  messages.push({ role: 'user', content: h.user_text });\n  messages.push({ role: 'assistant', content: h.reply });\n}\nmessages.push({\n  role: 'user',\n  content: `CONTEXT:\\n${contextLines.join('\\n')}\\n\\nCUSTOMER MESSAGE:\\n${text}`,\n});\n\nreturn [{\n  json: {\n    phone: n.phone,\n    name: n.name,\n    text,\n    message_id: n.message_id,\n    source: n.source,\n    route,\n    messages,\n    kb_sources: sources,\n  },\n}];\n"
+      },
+      "id": "a4",
+      "name": "Build context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a5-c1",
+              "leftValue": "={{ $json.route }}",
+              "rightValue": "llm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a5",
+      "name": "Use AI?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'openai/gpt-oss-120b', temperature: 0.2, max_completion_tokens: 1500, reasoning_effort: 'low', response_format: { type: 'json_object' }, messages: $json.messages }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a6",
+      "name": "Call LLM (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Groq API key"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse reply: validate the model output. Anything malformed or low-confidence is handed to a human.\nconst ctx = $('Build context').first().json;\nconst res = $input.first().json;\nconst MODEL = 'openai/gpt-oss-120b';\nconst INTENTS = ['greeting', 'product_info', 'order_status', 'shipping', 'returns', 'warranty', 'payment', 'hours', 'discount', 'other'];\n\nlet out = null;\nlet error = null;\ntry {\n  const content = res && res.choices && res.choices[0] && res.choices[0].message && res.choices[0].message.content;\n  if (!content) throw new Error((res && res.error && (res.error.message || res.error)) || 'empty model response');\n  out = JSON.parse(content);\n} catch (e) {\n  error = String(e.message || e).slice(0, 200);\n}\n\nlet reply;\nlet intent = 'other';\nlet escalate = false;\nlet confidence = 0;\n\nif (out && typeof out.reply === 'string' && out.reply.trim()) {\n  reply = out.reply.trim().slice(0, 700);\n  intent = INTENTS.includes(out.intent) ? out.intent : 'other';\n  confidence = Number(out.confidence);\n  if (!Number.isFinite(confidence)) confidence = 0.5;\n  confidence = Math.max(0, Math.min(1, confidence));\n  escalate = out.escalate === true || confidence < 0.6;\n  if (escalate && !/teammate|team member|colleague/i.test(reply)) {\n    reply += ' I have also passed this to a teammate to double-check.';\n  }\n} else {\n  reply = 'Sorry, I am having trouble answering right now. I have passed your message to a teammate who will reply during support hours.';\n  escalate = true;\n}\n\nreturn [{\n  json: {\n    phone: ctx.phone,\n    name: ctx.name,\n    user_text: ctx.text,\n    reply,\n    intent,\n    escalate,\n    confidence,\n    kb_sources: ctx.kb_sources,\n    route: 'llm',\n    model: MODEL,\n    source: ctx.source,\n    error,\n    created_at: new Date().toISOString(),\n  },\n}];\n"
+      },
+      "id": "a7",
+      "name": "Parse reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rule reply: no model call. Used for explicit human requests and non-text messages.\nconst ctx = $input.first().json;\n\nlet reply;\nlet intent;\nlet escalate;\nif (ctx.route === 'human') {\n  reply = 'Of course. I have asked a teammate to take over this chat. They will reply during support hours (Monday to Saturday, 9:00 to 18:00 Pakistan time).';\n  intent = 'human_request';\n  escalate = true;\n} else {\n  reply = 'I can only read text messages at the moment. Could you type your question?';\n  intent = 'other';\n  escalate = false;\n}\n\nreturn [{\n  json: {\n    phone: ctx.phone,\n    name: ctx.name,\n    user_text: ctx.text || '[non-text message]',\n    reply,\n    intent,\n    escalate,\n    confidence: 1,\n    kb_sources: [],\n    route: ctx.route,\n    model: 'rules',\n    source: ctx.source,\n    error: null,\n    created_at: new Date().toISOString(),\n  },\n}];\n"
+      },
+      "id": "a8",
+      "name": "Rule reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ reply: $json.reply, intent: $json.intent, escalated: $json.escalate, confidence: $json.confidence, sources: $json.kb_sources, route: $json.route }) }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a9",
+      "name": "Respond to chat",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "support_messages",
+        "fields": "phone,name,user_text,reply,intent,escalate,confidence,kb_sources,route,model,source,created_at",
+        "options": {}
+      },
+      "id": "a10",
+      "name": "Log message",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        2080,
+        300
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "REPLACE_ME",
+          "name": "MongoDB (n8n app user)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a11-c1",
+              "leftValue": "={{ $('Respond to chat').first().json.escalate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a11",
+      "name": "Needs a human?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Make ticket: one open ticket per handed-over message, for the support team to pick up.\nconst r = $('Respond to chat').first().json;\nreturn [{\n  json: {\n    ticket_id: `T-${Date.now()}`,\n    status: 'open',\n    phone: r.phone,\n    name: r.name,\n    user_text: r.user_text,\n    bot_reply: r.reply,\n    intent: r.intent,\n    created_at: new Date().toISOString(),\n  },\n}];\n"
+      },
+      "id": "a12",
+      "name": "Make ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "support_tickets",
+        "fields": "ticket_id,status,phone,name,user_text,bot_reply,intent,created_at",
+        "options": {}
+      },
+      "id": "a13",
+      "name": "Create ticket",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        2860,
+        220
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "REPLACE_ME",
+          "name": "MongoDB (n8n app user)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/YOUR_PHONE_NUMBER_ID/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.phone, type: 'text', text: { body: $json.reply } }) }}",
+        "options": {}
+      },
+      "id": "a14",
+      "name": "Send via WhatsApp Cloud API (disabled)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2080,
+        520
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "WhatsApp Cloud API token"
+        }
+      },
+      "disabled": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## WhatsApp AI support agent\n1. Add a **Header Auth** credential named *Groq API key*: name `Authorization`, value `Bearer <your key>`.\n2. Add the MongoDB credential on the three Mongo nodes.\n3. Send a POST to `/webhook/support-agent` (or use the chat simulator page).\nKnowledge base lives inside the *Build context* node.",
+        "height": 200,
+        "width": 520
+      },
+      "id": "a15",
+      "name": "Setup note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Customer message": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Get history",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get history": {
+      "main": [
+        [
+          {
+            "node": "Build context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build context": {
+      "main": [
+        [
+          {
+            "node": "Use AI?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Use AI?": {
+      "main": [
+        [
+          {
+            "node": "Call LLM (Groq)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rule reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call LLM (Groq)": {
+      "main": [
+        [
+          {
+            "node": "Parse reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse reply": {
+      "main": [
+        [
+          {
+            "node": "Respond to chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rule reply": {
+      "main": [
+        [
+          {
+            "node": "Respond to chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to chat": {
+      "main": [
+        [
+          {
+            "node": "Log message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send via WhatsApp Cloud API (disabled)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log message": {
+      "main": [
+        [
+          {
+            "node": "Needs a human?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs a human?": {
+      "main": [
+        [
+          {
+            "node": "Make ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Make ticket": {
+      "main": [
+        [
+          {
+            "node": "Create ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Karachi"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

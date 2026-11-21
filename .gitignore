@@ -1,0 +1,7 @@
+.env
+*.env
+node_modules/
+tests/ui.png
+tests/exported.json
+support-agent-transcript.json
+.DS_Store
